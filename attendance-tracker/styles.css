@@ -83,6 +83,27 @@ body {
 }
 .add-emp-btn:hover { background: #4f46e5; }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-day-btn {
+  background: #2d2e4a;
+  color: #a5b4fc;
+  border: 1px solid #3d3e6a;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.edit-day-btn:hover { background: #3d3e6a; }
+
 
 /* ══════════════════════════════════════════════════════════
    QUICK MARK PANEL
@@ -844,6 +865,13 @@ body {
   color: #94a3b8;
 }
 
+.modal-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
 .modal-field input {
   padding: 10px 12px;
   border-radius: 8px;
@@ -855,6 +883,7 @@ body {
   transition: border-color 0.2s;
 }
 .modal-field input:focus { border-color: #6366f1; }
+.modal-field input[type="date"] { color-scheme: dark; cursor: pointer; }
 
 .modal-actions {
   display: flex;

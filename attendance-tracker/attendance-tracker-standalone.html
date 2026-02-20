@@ -90,6 +90,27 @@ body {
 }
 .add-emp-btn:hover { background: #4f46e5; }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-day-btn {
+  background: #2d2e4a;
+  color: #a5b4fc;
+  border: 1px solid #3d3e6a;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.edit-day-btn:hover { background: #3d3e6a; }
+
 
 /* ══════════════════════════════════════════════════════════
    QUICK MARK PANEL
@@ -851,6 +872,13 @@ body {
   color: #94a3b8;
 }
 
+.modal-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
 .modal-field input {
   padding: 10px 12px;
   border-radius: 8px;
@@ -862,6 +890,7 @@ body {
   transition: border-color 0.2s;
 }
 .modal-field input:focus { border-color: #6366f1; }
+.modal-field input[type="date"] { color-scheme: dark; cursor: pointer; }
 
 .modal-actions {
   display: flex;
@@ -974,7 +1003,10 @@ body {
         <span class="month-label" id="mv-month-label">February 2026</span>
         <button class="nav-btn" id="mv-next">&#8250;</button>
       </div>
-      <button class="add-emp-btn" id="add-emp-btn">+ Add Employee</button>
+      <div class="header-actions">
+        <button class="edit-day-btn" id="edit-day-btn">&#9998; Edit Day</button>
+        <button class="add-emp-btn" id="add-emp-btn">+ Add Employee</button>
+      </div>
     </header>
 
     <!-- Quick Mark Panel -->
@@ -1067,6 +1099,24 @@ body {
       <div class="modal-actions">
         <button class="modal-cancel" id="modal-cancel">Cancel</button>
         <button class="modal-add"    id="modal-add">Add Employee</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       EDIT DAY MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="edit-day-overlay" style="display:none">
+    <div class="modal">
+      <h3 class="modal-title">&#9998; Edit a Previous Day</h3>
+      <p class="modal-hint">Jump to any past date to view and edit attendance.</p>
+      <div class="modal-field">
+        <label>Select Date</label>
+        <input type="date" id="edit-day-date" />
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="edit-day-cancel">Cancel</button>
+        <button class="modal-add"    id="edit-day-go">Go to Day</button>
       </div>
     </div>
   </div>
@@ -1661,6 +1711,55 @@ function addEmployee() {
 
 
 // ════════════════════════════════════════════════════════════
+// EDIT PREVIOUS DAY
+// ════════════════════════════════════════════════════════════
+
+function openEditDayModal() {
+  const todayStr = dk(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const inp = document.getElementById('edit-day-date');
+  inp.max   = todayStr;
+  // Pre-fill with currently selected day (if past/today), else today
+  const curStr = S.selDay ? dk(S.viewYear, S.viewMonth, S.selDay) : todayStr;
+  inp.value = curStr <= todayStr ? curStr : todayStr;
+  document.getElementById('edit-day-overlay').style.display = 'flex';
+  setTimeout(() => inp.focus(), 80);
+}
+
+function closeEditDayModal() {
+  document.getElementById('edit-day-overlay').style.display = 'none';
+}
+
+function applyEditDay() {
+  const val = document.getElementById('edit-day-date').value;
+  if (!val) { toast('Please select a date'); return; }
+
+  const parts = val.split('-');
+  const y = Number(parts[0]), month = Number(parts[1]) - 1, d = Number(parts[2]);
+
+  const selected = new Date(y, month, d);
+  const todayDate = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  if (selected > todayDate) { toast('Cannot edit future dates'); return; }
+
+  S.viewYear  = y;
+  S.viewMonth = month;
+  S.selDay    = d;
+  closeEditDayModal();
+
+  // If in employee view, switch back to month view
+  if (S.curView !== 'month') {
+    S.curView = 'month';
+    S.selEmpId = null;
+    closeCellPopup();
+    document.getElementById('employee-view').style.display = 'none';
+    document.getElementById('month-view').style.display    = '';
+  }
+
+  renderMonthView();
+  toast(`Editing ${DAYS_SHORT[new Date(y, month, d).getDay()]}, ${d} ${MONTHS[month].slice(0,3)} ${y}`);
+}
+
+
+// ════════════════════════════════════════════════════════════
 // REMOVE EMPLOYEE  (context menu)
 // ════════════════════════════════════════════════════════════
 
@@ -1714,6 +1813,17 @@ function wireEvents() {
   // Month navigation
   document.getElementById('mv-prev').addEventListener('click', () => changeMonthView(-1));
   document.getElementById('mv-next').addEventListener('click', () => changeMonthView(1));
+
+  // Edit day
+  document.getElementById('edit-day-btn').addEventListener('click', openEditDayModal);
+  document.getElementById('edit-day-cancel').addEventListener('click', closeEditDayModal);
+  document.getElementById('edit-day-go').addEventListener('click', applyEditDay);
+  document.getElementById('edit-day-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-day-overlay')) closeEditDayModal();
+  });
+  document.getElementById('edit-day-date').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applyEditDay();
+  });
 
   // Add employee
   document.getElementById('add-emp-btn').addEventListener('click', openAddEmployeeModal);
@@ -1771,6 +1881,7 @@ function wireEvents() {
       closeCellPopup();
       closeCtxMenu();
       closeAddEmployeeModal();
+      closeEditDayModal();
     }
   });
 }

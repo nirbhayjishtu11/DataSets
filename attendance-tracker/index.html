@@ -21,7 +21,10 @@
         <span class="month-label" id="mv-month-label">February 2026</span>
         <button class="nav-btn" id="mv-next">&#8250;</button>
       </div>
-      <button class="add-emp-btn" id="add-emp-btn">+ Add Employee</button>
+      <div class="header-actions">
+        <button class="edit-day-btn" id="edit-day-btn">&#9998; Edit Day</button>
+        <button class="add-emp-btn" id="add-emp-btn">+ Add Employee</button>
+      </div>
     </header>
 
     <!-- Quick Mark Panel -->
@@ -114,6 +117,24 @@
       <div class="modal-actions">
         <button class="modal-cancel" id="modal-cancel">Cancel</button>
         <button class="modal-add"    id="modal-add">Add Employee</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       EDIT DAY MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="edit-day-overlay" style="display:none">
+    <div class="modal">
+      <h3 class="modal-title">&#9998; Edit a Previous Day</h3>
+      <p class="modal-hint">Jump to any past date to view and edit attendance.</p>
+      <div class="modal-field">
+        <label>Select Date</label>
+        <input type="date" id="edit-day-date" />
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="edit-day-cancel">Cancel</button>
+        <button class="modal-add"    id="edit-day-go">Go to Day</button>
       </div>
     </div>
   </div>

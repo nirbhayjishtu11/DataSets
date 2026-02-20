@@ -578,6 +578,55 @@ function addEmployee() {
 
 
 // ════════════════════════════════════════════════════════════
+// EDIT PREVIOUS DAY
+// ════════════════════════════════════════════════════════════
+
+function openEditDayModal() {
+  const todayStr = dk(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const inp = document.getElementById('edit-day-date');
+  inp.max   = todayStr;
+  // Pre-fill with currently selected day (if past/today), else today
+  const curStr = S.selDay ? dk(S.viewYear, S.viewMonth, S.selDay) : todayStr;
+  inp.value = curStr <= todayStr ? curStr : todayStr;
+  document.getElementById('edit-day-overlay').style.display = 'flex';
+  setTimeout(() => inp.focus(), 80);
+}
+
+function closeEditDayModal() {
+  document.getElementById('edit-day-overlay').style.display = 'none';
+}
+
+function applyEditDay() {
+  const val = document.getElementById('edit-day-date').value;
+  if (!val) { toast('Please select a date'); return; }
+
+  const parts = val.split('-');
+  const y = Number(parts[0]), month = Number(parts[1]) - 1, d = Number(parts[2]);
+
+  const selected = new Date(y, month, d);
+  const todayDate = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  if (selected > todayDate) { toast('Cannot edit future dates'); return; }
+
+  S.viewYear  = y;
+  S.viewMonth = month;
+  S.selDay    = d;
+  closeEditDayModal();
+
+  // If in employee view, switch back to month view
+  if (S.curView !== 'month') {
+    S.curView = 'month';
+    S.selEmpId = null;
+    closeCellPopup();
+    document.getElementById('employee-view').style.display = 'none';
+    document.getElementById('month-view').style.display    = '';
+  }
+
+  renderMonthView();
+  toast(`Editing ${DAYS_SHORT[new Date(y, month, d).getDay()]}, ${d} ${MONTHS[month].slice(0,3)} ${y}`);
+}
+
+
+// ════════════════════════════════════════════════════════════
 // REMOVE EMPLOYEE  (context menu)
 // ════════════════════════════════════════════════════════════
 
@@ -631,6 +680,17 @@ function wireEvents() {
   // Month navigation
   document.getElementById('mv-prev').addEventListener('click', () => changeMonthView(-1));
   document.getElementById('mv-next').addEventListener('click', () => changeMonthView(1));
+
+  // Edit day
+  document.getElementById('edit-day-btn').addEventListener('click', openEditDayModal);
+  document.getElementById('edit-day-cancel').addEventListener('click', closeEditDayModal);
+  document.getElementById('edit-day-go').addEventListener('click', applyEditDay);
+  document.getElementById('edit-day-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-day-overlay')) closeEditDayModal();
+  });
+  document.getElementById('edit-day-date').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applyEditDay();
+  });
 
   // Add employee
   document.getElementById('add-emp-btn').addEventListener('click', openAddEmployeeModal);
@@ -688,6 +748,7 @@ function wireEvents() {
       closeCellPopup();
       closeCtxMenu();
       closeAddEmployeeModal();
+      closeEditDayModal();
     }
   });
 }
