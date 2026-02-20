@@ -529,6 +529,7 @@ body {
   gap: 16px;
   padding: 20px 20px 16px;
   background: #fff;
+  flex-wrap: wrap;
 }
 
 .ep-avatar {
@@ -557,10 +558,43 @@ body {
   margin-top: 3px;
 }
 
+/* ── Edit button in profile card ── */
+.ep-edit-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #6366f1;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.ep-edit-btn:hover { background: #e5e7eb; }
+
+/* ── Wage badge in profile card ── */
+.ep-wage-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: #16a34a;
+  margin-top: 5px;
+  display: inline-block;
+}
+.ep-wage-unset {
+  color: #9ca3af;
+  font-weight: 400;
+  font-style: italic;
+}
+
 /* ── Stats Row ── */
 .ep-stats-row {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   margin: 0 16px 14px;
   background: #fff;
   border-radius: 14px;
@@ -589,6 +623,9 @@ body {
   color: #9ca3af;
   text-align: center;
 }
+
+.ep-stat-money { color: #16a34a; }
+.ep-stat-muted { color: #d1d5db; }
 
 .ep-stat-divider {
   width: 1px;

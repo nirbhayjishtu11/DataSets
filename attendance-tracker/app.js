@@ -91,6 +91,10 @@ function hrsLabel(hrs) {
   return `${hrs}h`;
 }
 
+function fmtMoney(n) {
+  return '\u20B9' + Math.round(n).toLocaleString('en-IN');
+}
+
 function initials(name) {
   return name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
 }
@@ -448,21 +452,30 @@ function renderEmployeeView() {
   const totalDays = dim(y, m);
 
   // ── Calculate stats ───────────────────────────────────────
+  const wage = emp.wage || 0;
   let monthHrs = 0, allTimeHrs = 0;
   let presentCount = 0, absentCount = 0;
+  let monthEarnings = 0, allTimeEarnings = 0;
 
   for (let d = 1; d <= totalDays; d++) {
     const h = getHrs(emp.id, dk(y, m, d));
-    if (h !== null) monthHrs += h;
+    if (h !== null) {
+      monthHrs += h;
+      if (wage && h > 0) monthEarnings += (h / 8) * wage;
+    }
   }
 
   for (const [key, val] of Object.entries(S.attendance)) {
     if (key.startsWith(`${emp.id}|`)) {
       allTimeHrs += val;
-      if (val  > 0) presentCount++;
+      if (val > 0) { presentCount++; if (wage) allTimeEarnings += (val / 8) * wage; }
       if (val === 0) absentCount++;
     }
   }
+
+  const wageLabel      = wage ? `${fmtMoney(wage)}/day` : 'Tap Edit to set wage';
+  const monthEarnStr   = wage ? fmtMoney(monthEarnings)   : '—';
+  const totalEarnStr   = wage ? fmtMoney(allTimeEarnings)  : '—';
 
   // ── Render ────────────────────────────────────────────────
   const content = document.getElementById('emp-view-content');
@@ -472,7 +485,9 @@ function renderEmployeeView() {
        <div class="ep-info">
          <h2 class="ep-name">${emp.name}</h2>
          <p class="ep-role">${emp.role}</p>
+         <p class="ep-wage-badge ${wage ? '' : 'ep-wage-unset'}">${wageLabel}</p>
        </div>
+       <button class="ep-edit-btn" id="ep-edit-btn">&#9998; Edit</button>
      </div>
 
      <div class="ep-stats-row">
@@ -482,8 +497,13 @@ function renderEmployeeView() {
        </div>
        <div class="ep-stat-divider"></div>
        <div class="ep-stat">
-         <span class="ep-stat-num">${allTimeHrs}h</span>
-         <span class="ep-stat-lbl">All Time</span>
+         <span class="ep-stat-num ${!wage ? 'ep-stat-muted' : 'ep-stat-money'}">${monthEarnStr}</span>
+         <span class="ep-stat-lbl">Month Earned</span>
+       </div>
+       <div class="ep-stat-divider"></div>
+       <div class="ep-stat">
+         <span class="ep-stat-num ${!wage ? 'ep-stat-muted' : 'ep-stat-money'}">${totalEarnStr}</span>
+         <span class="ep-stat-lbl">Total Earned</span>
        </div>
        <div class="ep-stat-divider"></div>
        <div class="ep-stat">
@@ -557,6 +577,9 @@ function renderEmployeeView() {
     }
     grid.appendChild(cell);
   }
+
+  // Edit button in profile card
+  document.getElementById('ep-edit-btn').addEventListener('click', () => openEditEmpModal(S.selEmpId));
 
   // Month navigation
   document.getElementById('ep-prev').addEventListener('click', () => {
@@ -663,6 +686,7 @@ function openEditEmpModal(empId) {
   editEmpId = empId;
   document.getElementById('edit-emp-name').value = emp.name;
   document.getElementById('edit-emp-role').value = emp.role;
+  document.getElementById('edit-emp-wage').value = emp.wage || '';
   document.getElementById('edit-emp-overlay').style.display = 'flex';
   setTimeout(() => document.getElementById('edit-emp-name').focus(), 80);
 }
@@ -673,13 +697,16 @@ function closeEditEmpModal() {
 }
 
 function saveEditEmp() {
-  const name = document.getElementById('edit-emp-name').value.trim();
-  const role = document.getElementById('edit-emp-role').value.trim() || 'Worker';
+  const name    = document.getElementById('edit-emp-name').value.trim();
+  const role    = document.getElementById('edit-emp-role').value.trim() || 'Worker';
+  const wageRaw = document.getElementById('edit-emp-wage').value;
+  const wage    = wageRaw !== '' ? Math.max(0, Math.round(Number(wageRaw))) : 0;
   if (!name) { toast('Please enter a name'); return; }
   const emp = S.employees.find(e => e.id === editEmpId);
   if (!emp) return;
   emp.name = name;
   emp.role = role;
+  emp.wage = wage;
   save();
   closeEditEmpModal();
   if (S.curView === 'employee' && S.selEmpId === editEmpId) renderEmployeeView();
@@ -815,6 +842,9 @@ function wireEvents() {
     if (e.key === 'Enter') document.getElementById('edit-emp-role').focus();
   });
   document.getElementById('edit-emp-role').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('edit-emp-wage').focus();
+  });
+  document.getElementById('edit-emp-wage').addEventListener('keydown', e => {
     if (e.key === 'Enter') saveEditEmp();
   });
 
