@@ -243,12 +243,23 @@ function renderQuickPanel() {
   const labelEl     = document.getElementById('quick-date-label');
   const bulkActions = document.getElementById('bulk-actions');
   const listEl      = document.getElementById('quick-emp-list');
+  const prevBtn     = document.getElementById('qd-prev');
+  const nextBtn     = document.getElementById('qd-next');
 
   if (!selDay) {
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
     bulkActions.style.display = 'none';
     listEl.innerHTML = '<p class="quick-hint">&#8593; Click any day column above to mark attendance</p>';
     return;
   }
+
+  // Show nav arrows; disable next if already on today
+  prevBtn.style.display = '';
+  nextBtn.style.display = '';
+  const todayDate = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const selDate   = new Date(y, m, selDay);
+  nextBtn.disabled = selDate >= todayDate;
 
   const dayLabel = `${DAYS_SHORT[dow(y, m, selDay)]}, ${selDay} ${MONTHS[m].slice(0,3)} ${y}`;
   labelEl.textContent = dayLabel;
@@ -299,6 +310,33 @@ function renderQuickPanel() {
 
     listEl.appendChild(card);
   });
+}
+
+// ─── Day navigation (prev / next) ────────────────────────────────────────────
+function changeSelDay(dir) {
+  if (!S.selDay) return;
+  let y = S.viewYear, m = S.viewMonth, d = S.selDay + dir;
+
+  if (d < 1) {
+    m--;
+    if (m < 0) { m = 11; y--; }
+    d = dim(y, m);
+  } else if (d > dim(y, m)) {
+    m++;
+    if (m > 11) { m = 0; y++; }
+    d = 1;
+  }
+
+  // Never step into the future
+  const target    = new Date(y, m, d);
+  const todayDate = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  if (target > todayDate) return;
+
+  S.viewYear  = y;
+  S.viewMonth = m;
+  S.selDay    = d;
+  closeCellPopup();
+  renderMonthView();
 }
 
 // ─── Mark All for selected day ────────────────────────────────────────────────
@@ -680,6 +718,10 @@ function wireEvents() {
   // Month navigation
   document.getElementById('mv-prev').addEventListener('click', () => changeMonthView(-1));
   document.getElementById('mv-next').addEventListener('click', () => changeMonthView(1));
+
+  // Day prev/next
+  document.getElementById('qd-prev').addEventListener('click', () => changeSelDay(-1));
+  document.getElementById('qd-next').addEventListener('click', () => changeSelDay(1));
 
   // Edit day
   document.getElementById('edit-day-btn').addEventListener('click', openEditDayModal);
