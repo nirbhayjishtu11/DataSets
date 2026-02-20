@@ -997,3 +997,109 @@ body {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+══════════════════════════════════════════════════════════ */
+
+/* Fix 100vh on mobile browsers (address bar eats space) */
+@supports (height: 100dvh) {
+  .view { height: 100dvh; }
+}
+
+@media (max-width: 640px) {
+
+  /* ── Header ── */
+  .app-header { padding: 10px 12px; gap: 8px; }
+  .app-title  { font-size: 15px; }
+  .month-label { font-size: 13px; min-width: 110px; }
+  .nav-btn    { width: 28px; height: 28px; font-size: 18px; }
+  .edit-day-btn, .add-emp-btn { padding: 6px 10px; font-size: 12px; }
+
+  /* ── Quick panel ── */
+  .quick-panel    { padding: 8px 12px 10px; max-height: 200px; }
+  .qcard          { padding: 6px 8px; gap: 6px; }
+  .qcard-name     { font-size: 12px; min-width: 70px; }
+  .qbtn           { padding: 5px 8px; font-size: 11px; }
+  .qhrs-input     { width: 46px; font-size: 11px; }
+  .bulk-btn       { padding: 5px 10px; font-size: 11px; }
+  .quick-date-label { font-size: 12px; }
+
+  /* ── Legend ── */
+  .legend-bar { padding: 6px 12px; gap: 10px; }
+  .li         { font-size: 10px; }
+
+  /* ── Grid ── */
+  .th-emp, .td-emp { min-width: 120px; max-width: 160px; }
+  .emp-row-cell    { padding: 6px 8px; gap: 6px; }
+  .emp-av          { width: 26px; height: 26px; font-size: 10px; }
+  .emp-nm          { font-size: 12px; }
+  .emp-menu        { font-size: 14px; }
+  .th-day          { min-width: 36px; padding: 4px 2px; }
+  .th-dnum         { font-size: 11px; }
+  .th-dname        { font-size: 8px; }
+  .td-day          { padding: 9px 2px; font-size: 10px; }
+  .th-total, .td-total { min-width: 46px; font-size: 10px; }
+
+  /* ── Cell popup → bottom sheet on mobile ── */
+  .cell-popup {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    min-width: unset;
+    border-radius: 20px 20px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+  .cp-btn { padding: 10px 4px; font-size: 13px; }
+  .cp-clear-btn { padding: 10px; font-size: 13px; }
+
+  /* ── Modals ── */
+  .modal { padding: 20px 16px; }
+  .modal-overlay { padding: 16px; align-items: flex-end; }
+  .modal { border-radius: 20px 20px 0 0; max-width: 100%; }
+
+  /* ── Employee view ── */
+  .ep-profile-card { padding: 16px 16px 12px; gap: 12px; }
+  .ep-avatar       { width: 54px; height: 54px; font-size: 18px; }
+  .ep-name         { font-size: 18px; }
+  .ep-stats-row    { margin: 0 12px 12px; }
+  .ep-stat         { padding: 10px 4px; }
+  .ep-stat-num     { font-size: 17px; }
+  .ep-stat-lbl     { font-size: 10px; }
+  .ep-cal-nav      { padding: 8px 14px 4px; }
+  .ep-calendar     { padding: 0 12px 6px; }
+  .ep-cal-grid     { gap: 3px; }
+  .ep-day          { font-size: 12px; }
+  .ep-legend       { padding: 6px 14px 16px; gap: 10px; }
+  .ep-li           { font-size: 11px; }
+
+  /* ── Context menu – full width at bottom on touch ── */
+  .ctx-menu {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    min-width: unset;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+  .ctx-item { padding: 14px 20px; font-size: 15px; }
+}
+
+@media (max-width: 380px) {
+  .app-title    { font-size: 13px; }
+  .month-label  { min-width: 96px; font-size: 12px; }
+  .th-emp, .td-emp { min-width: 100px; }
+  .emp-av       { width: 22px; height: 22px; font-size: 9px; }
+  .ep-stat-num  { font-size: 15px; }
+}
