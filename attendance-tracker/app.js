@@ -105,19 +105,6 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
-// ─── Seed demo data (first load only) ─────────────────────────────────────────
-function seedDemo() {
-  if (localStorage.getItem('orchard_seeded_v2')) return;
-  const y = TODAY.getFullYear(), m = TODAY.getMonth();
-  const statuses = [8, 8, 0, 8, 4, 8, 8, 0, 8, 8, 6, 8, 8, 0, 10, 8, 8];
-  S.employees.forEach(emp => {
-    for (let d = 1; d < TODAY.getDate(); d++) {
-      const hrs = statuses[(d + S.employees.indexOf(emp) * 3) % statuses.length];
-      setHrs(emp.id, dk(y, m, d), hrs);
-    }
-  });
-  localStorage.setItem('orchard_seeded_v2', '1');
-}
 
 // ════════════════════════════════════════════════════════════
 // MONTH GRID VIEW
@@ -797,6 +784,5 @@ function wireEvents() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 load();
-seedDemo();
 wireEvents();
 renderMonthView();
