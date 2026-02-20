@@ -652,6 +652,43 @@ function applyEditDay() {
 
 
 // ════════════════════════════════════════════════════════════
+// EDIT EMPLOYEE NAME / ROLE
+// ════════════════════════════════════════════════════════════
+
+let editEmpId = null;
+
+function openEditEmpModal(empId) {
+  const emp = S.employees.find(e => e.id === empId);
+  if (!emp) return;
+  editEmpId = empId;
+  document.getElementById('edit-emp-name').value = emp.name;
+  document.getElementById('edit-emp-role').value = emp.role;
+  document.getElementById('edit-emp-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('edit-emp-name').focus(), 80);
+}
+
+function closeEditEmpModal() {
+  document.getElementById('edit-emp-overlay').style.display = 'none';
+  editEmpId = null;
+}
+
+function saveEditEmp() {
+  const name = document.getElementById('edit-emp-name').value.trim();
+  const role = document.getElementById('edit-emp-role').value.trim() || 'Worker';
+  if (!name) { toast('Please enter a name'); return; }
+  const emp = S.employees.find(e => e.id === editEmpId);
+  if (!emp) return;
+  emp.name = name;
+  emp.role = role;
+  save();
+  closeEditEmpModal();
+  if (S.curView === 'employee' && S.selEmpId === editEmpId) renderEmployeeView();
+  else renderMonthView();
+  toast(`Updated: ${name}`);
+}
+
+
+// ════════════════════════════════════════════════════════════
 // REMOVE EMPLOYEE  (context menu)
 // ════════════════════════════════════════════════════════════
 
@@ -761,8 +798,24 @@ function wireEvents() {
   document.getElementById('ctx-view').addEventListener('click', () => {
     if (ctxEmpId) openEmployeeView(ctxEmpId);
   });
+  document.getElementById('ctx-edit').addEventListener('click', () => {
+    if (ctxEmpId) { closeCtxMenu(); openEditEmpModal(ctxEmpId); }
+  });
   document.getElementById('ctx-remove').addEventListener('click', () => {
     if (ctxEmpId) removeEmployee(ctxEmpId);
+  });
+
+  // Edit employee modal
+  document.getElementById('edit-emp-cancel').addEventListener('click', closeEditEmpModal);
+  document.getElementById('edit-emp-save').addEventListener('click', saveEditEmp);
+  document.getElementById('edit-emp-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-emp-overlay')) closeEditEmpModal();
+  });
+  document.getElementById('edit-emp-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('edit-emp-role').focus();
+  });
+  document.getElementById('edit-emp-role').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveEditEmp();
   });
 
   // Close context menu on outside click
@@ -778,6 +831,7 @@ function wireEvents() {
       closeCtxMenu();
       closeAddEmployeeModal();
       closeEditDayModal();
+      closeEditEmpModal();
     }
   });
 }

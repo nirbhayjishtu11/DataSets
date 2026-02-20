@@ -141,9 +141,31 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════════════
+       EDIT EMPLOYEE MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="edit-emp-overlay" style="display:none">
+    <div class="modal">
+      <h3 class="modal-title">Edit Employee</h3>
+      <div class="modal-field">
+        <label>Name</label>
+        <input type="text" id="edit-emp-name" placeholder="e.g. Ravi Kumar" autocomplete="off" />
+      </div>
+      <div class="modal-field">
+        <label>Role</label>
+        <input type="text" id="edit-emp-role" placeholder="e.g. Maid, Driver, Cook" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="edit-emp-cancel">Cancel</button>
+        <button class="modal-add"    id="edit-emp-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Employee context menu -->
   <div class="ctx-menu" id="ctx-menu" style="display:none">
     <button class="ctx-item" id="ctx-view">&#128100; View Details</button>
+    <button class="ctx-item" id="ctx-edit">&#9998; Edit Name / Role</button>
     <button class="ctx-item ctx-danger" id="ctx-remove">&#128465; Remove Employee</button>
   </div>
 
