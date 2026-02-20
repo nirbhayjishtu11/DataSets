@@ -1,222 +1,699 @@
-// ── State ──────────────────────────────────────────────────────────────────
-const today = new Date();
-let currentYear  = today.getFullYear();
-let currentMonth = today.getMonth(); // 0-indexed
+// ─── Constants ───────────────────────────────────────────────────────────────
+const TODAY       = new Date();
+const MONTHS      = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+const DAYS_SHORT  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
 
-// Attendance data: keyed by "YYYY-MM-DD" → 'present' | 'absent' | 'half' | null
-let attendance = loadAttendance();
+// ─── State ───────────────────────────────────────────────────────────────────
+let S = {
+  employees: [
+    { id: 'e1', name: 'Shankar',  role: 'Worker' },
+    { id: 'e2', name: 'Santosh',  role: 'Worker' },
+    { id: 'e3', name: 'Gopal',    role: 'Worker' },
+    { id: 'e4', name: 'Maya',     role: 'Maid'   },
+    { id: 'e5', name: 'Jaspal',   role: 'Worker' },
+  ],
+  attendance: {},   // key: `${empId}|YYYY-MM-DD`  → hours (number, 0 = absent)
+  viewYear:   TODAY.getFullYear(),
+  viewMonth:  TODAY.getMonth(),
+  selDay:     TODAY.getDate(),     // selected day in month view
+  selEmpId:   null,
+  empViewYear:  TODAY.getFullYear(),
+  empViewMonth: TODAY.getMonth(),
+  curView:    'month',             // 'month' | 'employee'
+};
 
-// Currently selected day cell (for marking)
-let selectedDate = null;
+// Transient (not saved)
+let popupEmpId = null;
+let popupDay   = null;
+let popupView  = 'month';         // which view opened the popup
+let ctxEmpId   = null;
 
-// ── Persistence ────────────────────────────────────────────────────────────
-function loadAttendance() {
+// ─── Persistence ─────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('orchard_v2', JSON.stringify({
+    e: S.employees,
+    a: S.attendance,
+  }));
+}
+
+function load() {
   try {
-    return JSON.parse(localStorage.getItem('attendance_data') || '{}');
-  } catch { return {}; }
+    const raw = localStorage.getItem('orchard_v2');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (Array.isArray(d.e) && d.e.length) S.employees  = d.e;
+    if (d.a && typeof d.a === 'object')   S.attendance = d.a;
+  } catch { /* ignore */ }
 }
 
-function saveAttendance() {
-  localStorage.setItem('attendance_data', JSON.stringify(attendance));
+// ─── Key Helpers ──────────────────────────────────────────────────────────────
+function dk(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function ak(empId, dateStr) { return `${empId}|${dateStr}`; }
+
+function getHrs(empId, dateStr) {
+  const v = S.attendance[ak(empId, dateStr)];
+  return v === undefined ? null : v;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function dateKey(year, month, day) {
-  const m = String(month + 1).padStart(2, '0');
-  const d = String(day).padStart(2, '0');
-  return `${year}-${m}-${d}`;
+function setHrs(empId, dateStr, hours) {
+  if (hours === null) delete S.attendance[ak(empId, dateStr)];
+  else S.attendance[ak(empId, dateStr)] = Number(hours);
+  save();
 }
 
-function isToday(year, month, day) {
-  return year === today.getFullYear() &&
-         month === today.getMonth() &&
-         day === today.getDate();
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
+function dim(y, m)   { return new Date(y, m + 1, 0).getDate(); }
+function dow(y, m, d){ return new Date(y, m, d).getDay(); }   // 0=Sun
+
+function dayStatus(y, m, d) {
+  const td = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  const cd = new Date(y, m, d);
+  if (cd.getTime() === td.getTime()) return 'today';
+  if (cd < td) return 'past';
+  return 'future';
 }
 
-function isFuture(year, month, day) {
-  const d = new Date(year, month, day);
-  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  return d > t;
+// ─── Status / Labels ──────────────────────────────────────────────────────────
+function statusOf(hrs) {
+  if (hrs === null)  return 'unmarked';
+  if (hrs === 0)     return 'absent';
+  if (hrs < 8)       return 'partial';
+  if (hrs === 8)     return 'present';
+  return 'overtime';
 }
 
-const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December'
-];
+function hrsLabel(hrs) {
+  if (hrs === null) return '—';
+  if (hrs === 0)    return 'Abs';
+  return `${hrs}h`;
+}
 
-// ── Calendar Render ────────────────────────────────────────────────────────
-function renderCalendar() {
-  document.getElementById('month-label').textContent =
-    `${MONTH_NAMES[currentMonth]} ${currentYear}`;
+function initials(name) {
+  return name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+}
 
-  const grid = document.getElementById('calendar-grid');
-  grid.innerHTML = '';
+// ─── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
 
-  // First weekday of month (Monday = 0 in our grid)
-  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const offset = (firstDay === 0) ? 6 : firstDay - 1; // Mon-based
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+// ─── Seed demo data (first load only) ─────────────────────────────────────────
+function seedDemo() {
+  if (localStorage.getItem('orchard_seeded_v2')) return;
+  const y = TODAY.getFullYear(), m = TODAY.getMonth();
+  const statuses = [8, 8, 0, 8, 4, 8, 8, 0, 8, 8, 6, 8, 8, 0, 10, 8, 8];
+  S.employees.forEach(emp => {
+    for (let d = 1; d < TODAY.getDate(); d++) {
+      const hrs = statuses[(d + S.employees.indexOf(emp) * 3) % statuses.length];
+      setHrs(emp.id, dk(y, m, d), hrs);
+    }
+  });
+  localStorage.setItem('orchard_seeded_v2', '1');
+}
 
-  // Empty cells
-  for (let i = 0; i < offset; i++) {
+// ════════════════════════════════════════════════════════════
+// MONTH GRID VIEW
+// ════════════════════════════════════════════════════════════
+
+function renderMonthView() {
+  const { viewYear: y, viewMonth: m, selDay } = S;
+  const totalDays = dim(y, m);
+
+  document.getElementById('mv-month-label').textContent = `${MONTHS[m]} ${y}`;
+
+  // ── Build header row ──────────────────────────────────────
+  const headRow = document.getElementById('grid-head-row');
+  headRow.innerHTML = '';
+
+  // Employee th
+  const empTh = document.createElement('th');
+  empTh.className = 'th-emp';
+  empTh.textContent = 'EMPLOYEE';
+  headRow.appendChild(empTh);
+
+  // Day ths
+  for (let d = 1; d <= totalDays; d++) {
+    const th   = document.createElement('th');
+    th.className = 'th-day';
+    const ds   = dayStatus(y, m, d);
+    const isSel = d === selDay;
+
+    if (ds === 'today')  th.classList.add('col-today');
+    if (ds === 'future') th.classList.add('col-future');
+    if (isSel)           th.classList.add('col-selected');
+
+    th.innerHTML =
+      `<span class="th-dnum">${d}</span>` +
+      `<span class="th-dname">${DAYS_SHORT[dow(y, m, d)]}</span>` +
+      (ds === 'today' ? '<span class="today-bullet">•</span>' : '');
+
+    th.dataset.day = d;
+    th.addEventListener('click', () => { S.selDay = d; renderMonthView(); });
+    headRow.appendChild(th);
+  }
+
+  // Total th
+  const totTh = document.createElement('th');
+  totTh.className = 'th-total';
+  totTh.textContent = 'TOTAL';
+  headRow.appendChild(totTh);
+
+  // ── Build body rows ───────────────────────────────────────
+  const tbody = document.getElementById('grid-body');
+  tbody.innerHTML = '';
+
+  for (const emp of S.employees) {
+    const tr = document.createElement('tr');
+
+    // Employee name cell
+    const nameTd = document.createElement('td');
+    nameTd.className = 'td-emp';
+    nameTd.innerHTML =
+      `<div class="emp-row-cell">` +
+        `<span class="emp-av">${initials(emp.name)}</span>` +
+        `<span class="emp-nm" data-id="${emp.id}">${emp.name}</span>` +
+        `<button class="emp-menu" data-id="${emp.id}" title="Options">&#8943;</button>` +
+      `</div>`;
+
+    nameTd.querySelector('.emp-nm').addEventListener('click', () => openEmployeeView(emp.id));
+    nameTd.querySelector('.emp-menu').addEventListener('click', e => showCtxMenu(emp.id, e));
+    tr.appendChild(nameTd);
+
+    // Day cells
+    let monthTotal = 0;
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = dk(y, m, d);
+      const hrs     = getHrs(emp.id, dateStr);
+      const status  = statusOf(hrs);
+      const ds      = dayStatus(y, m, d);
+      const isSel   = d === selDay;
+
+      if (hrs !== null) monthTotal += hrs;
+
+      const td = document.createElement('td');
+      td.className = `td-day cell-${status}`;
+      if (ds === 'today')  td.classList.add('cell-today-col');
+      if (ds === 'future') td.classList.add('cell-future');
+      if (isSel)           td.classList.add('cell-sel-col');
+
+      td.textContent   = hrsLabel(hrs);
+      td.dataset.empId = emp.id;
+      td.dataset.day   = d;
+
+      if (ds !== 'future') {
+        td.addEventListener('click', e => openCellPopup(emp.id, d, td, e));
+      }
+      tr.appendChild(td);
+    }
+
+    // Total cell
+    const totTd = document.createElement('td');
+    totTd.className = 'td-total';
+    totTd.textContent = monthTotal > 0 ? `${monthTotal}h` : '—';
+    tr.appendChild(totTd);
+
+    tbody.appendChild(tr);
+  }
+
+  renderQuickPanel();
+
+  // Scroll selected / today column into view
+  requestAnimationFrame(() => {
+    const selTh = headRow.querySelector('.col-selected') ||
+                  headRow.querySelector('.col-today');
+    if (selTh) selTh.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  });
+}
+
+// ─── Quick Mark Panel ────────────────────────────────────────────────────────
+function renderQuickPanel() {
+  const { selDay, viewYear: y, viewMonth: m } = S;
+  const dateStr  = selDay ? dk(y, m, selDay) : null;
+  const ds       = selDay ? dayStatus(y, m, selDay) : null;
+  const isFuture = ds === 'future';
+
+  const labelEl     = document.getElementById('quick-date-label');
+  const bulkActions = document.getElementById('bulk-actions');
+  const listEl      = document.getElementById('quick-emp-list');
+
+  if (!selDay) {
+    bulkActions.style.display = 'none';
+    listEl.innerHTML = '<p class="quick-hint">&#8593; Click any day column above to mark attendance</p>';
+    return;
+  }
+
+  const dayLabel = `${DAYS_SHORT[dow(y, m, selDay)]}, ${selDay} ${MONTHS[m].slice(0,3)} ${y}`;
+  labelEl.textContent = dayLabel;
+
+  bulkActions.style.display = isFuture ? 'none' : 'flex';
+  listEl.innerHTML = '';
+
+  S.employees.forEach(emp => {
+    const hrs    = getHrs(emp.id, dateStr);
+    const status = statusOf(hrs);
+
+    const card = document.createElement('div');
+    card.className = 'qcard';
+
+    if (isFuture) {
+      card.innerHTML =
+        `<span class="qcard-name">${emp.name}</span>` +
+        `<span class="qcard-future">Future date – cannot mark</span>`;
+    } else {
+      const defHrs = (hrs !== null && hrs !== 0 && hrs !== 8) ? hrs : 8;
+      card.innerHTML =
+        `<span class="qcard-name">${emp.name}</span>` +
+        `<span class="qcard-badge badge-${status}">${hrsLabel(hrs)}</span>` +
+        `<button class="qbtn qbtn-present" data-emp="${emp.id}">Present</button>` +
+        `<button class="qbtn qbtn-absent"  data-emp="${emp.id}">Absent</button>` +
+        `<input  class="qhrs-input" type="number" min="0" max="24" step="0.5" value="${defHrs}" />` +
+        `<button class="qbtn qbtn-set"     data-emp="${emp.id}">Set</button>`;
+
+      const inp = card.querySelector('.qhrs-input');
+      card.querySelector('.qbtn-present').addEventListener('click', () => {
+        setHrs(emp.id, dateStr, 8);
+        renderMonthView();
+        toast(`${emp.name}: Present (8h)`);
+      });
+      card.querySelector('.qbtn-absent').addEventListener('click', () => {
+        setHrs(emp.id, dateStr, 0);
+        renderMonthView();
+        toast(`${emp.name}: Absent`);
+      });
+      card.querySelector('.qbtn-set').addEventListener('click', () => {
+        const v = parseFloat(inp.value);
+        if (isNaN(v) || v < 0 || v > 24) { toast('Enter hours between 0 and 24'); return; }
+        setHrs(emp.id, dateStr, v);
+        renderMonthView();
+        toast(`${emp.name}: ${v}h`);
+      });
+    }
+
+    listEl.appendChild(card);
+  });
+}
+
+// ─── Mark All for selected day ────────────────────────────────────────────────
+function markAllForDay(type) {
+  if (!S.selDay) return;
+  const dateStr = dk(S.viewYear, S.viewMonth, S.selDay);
+  const hrs     = type === 'present' ? 8 : 0;
+  S.employees.forEach(emp => setHrs(emp.id, dateStr, hrs));
+  renderMonthView();
+  toast(type === 'present' ? 'All marked Present (8h)' : 'All marked Absent');
+}
+
+// ─── Month navigation (month view) ───────────────────────────────────────────
+function changeMonthView(dir) {
+  S.viewMonth += dir;
+  if (S.viewMonth > 11) { S.viewMonth = 0;  S.viewYear++;  }
+  if (S.viewMonth < 0)  { S.viewMonth = 11; S.viewYear--;  }
+  // Keep selDay within valid range
+  S.selDay = Math.min(S.selDay, dim(S.viewYear, S.viewMonth));
+  closeCellPopup();
+  renderMonthView();
+}
+
+
+// ════════════════════════════════════════════════════════════
+// CELL EDIT POPUP
+// ════════════════════════════════════════════════════════════
+
+function openCellPopup(empId, day, cellEl, evt) {
+  evt.stopPropagation();
+  popupEmpId = empId;
+  popupDay   = day;
+  popupView  = S.curView;
+
+  const y  = S.curView === 'month' ? S.viewYear  : S.empViewYear;
+  const m  = S.curView === 'month' ? S.viewMonth : S.empViewMonth;
+  const dateStr = dk(y, m, day);
+  const hrs     = getHrs(empId, dateStr);
+  const emp     = S.employees.find(e => e.id === empId);
+  const dayName = DAYS_SHORT[dow(y, m, day)];
+
+  document.getElementById('cp-title').textContent =
+    `${emp.name} – ${dayName} ${day} ${MONTHS[m].slice(0,3)} ${y}`;
+  document.getElementById('cp-hours').value = hrs !== null ? hrs : 8;
+
+  const popup   = document.getElementById('cell-popup');
+  const overlay = document.getElementById('popup-overlay');
+  popup.style.display   = 'block';
+  overlay.style.display = 'block';
+
+  // Position near cell
+  const rect = cellEl.getBoundingClientRect();
+  let top  = rect.bottom + 6;
+  let left = rect.left;
+  popup.style.top  = `${top}px`;
+  popup.style.left = `${left}px`;
+
+  requestAnimationFrame(() => {
+    const pw = popup.offsetWidth;
+    const ph = popup.offsetHeight;
+    if (left + pw > window.innerWidth - 8)  left = window.innerWidth  - pw - 8;
+    if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 6;
+    popup.style.top  = `${top}px`;
+    popup.style.left = `${left}px`;
+  });
+}
+
+function closeCellPopup() {
+  document.getElementById('cell-popup').style.display   = 'none';
+  document.getElementById('popup-overlay').style.display = 'none';
+  popupEmpId = null;
+  popupDay   = null;
+}
+
+function applyPopup(hrs) {
+  if (popupEmpId === null || popupDay === null) return;
+  const y = popupView === 'month' ? S.viewYear  : S.empViewYear;
+  const m = popupView === 'month' ? S.viewMonth : S.empViewMonth;
+  const dateStr = dk(y, m, popupDay);
+  const emp = S.employees.find(e => e.id === popupEmpId);
+
+  setHrs(popupEmpId, dateStr, hrs);
+  closeCellPopup();
+
+  const label = hrs === null ? 'Cleared' : hrs === 0 ? 'Absent' : `${hrs}h`;
+  toast(`${emp.name}: ${label}`);
+
+  if (popupView === 'month')    renderMonthView();
+  else                          renderEmployeeView();
+}
+
+
+// ════════════════════════════════════════════════════════════
+// EMPLOYEE VIEW
+// ════════════════════════════════════════════════════════════
+
+function openEmployeeView(empId) {
+  S.curView     = 'employee';
+  S.selEmpId    = empId;
+  S.empViewYear  = S.viewYear;
+  S.empViewMonth = S.viewMonth;
+  closeCtxMenu();
+  document.getElementById('month-view').style.display    = 'none';
+  document.getElementById('employee-view').style.display = '';
+  renderEmployeeView();
+}
+
+function closeEmployeeView() {
+  S.curView  = 'month';
+  S.selEmpId = null;
+  closeCellPopup();
+  document.getElementById('employee-view').style.display = 'none';
+  document.getElementById('month-view').style.display    = '';
+  renderMonthView();
+}
+
+function renderEmployeeView() {
+  const emp = S.employees.find(e => e.id === S.selEmpId);
+  if (!emp) return;
+
+  const y = S.empViewYear, m = S.empViewMonth;
+  const totalDays = dim(y, m);
+
+  // ── Calculate stats ───────────────────────────────────────
+  let monthHrs = 0, allTimeHrs = 0;
+  let presentCount = 0, absentCount = 0;
+
+  for (let d = 1; d <= totalDays; d++) {
+    const h = getHrs(emp.id, dk(y, m, d));
+    if (h !== null) monthHrs += h;
+  }
+
+  for (const [key, val] of Object.entries(S.attendance)) {
+    if (key.startsWith(`${emp.id}|`)) {
+      allTimeHrs += val;
+      if (val  > 0) presentCount++;
+      if (val === 0) absentCount++;
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────
+  const content = document.getElementById('emp-view-content');
+  content.innerHTML =
+    `<div class="ep-profile-card">
+       <div class="ep-avatar">${initials(emp.name)}</div>
+       <div class="ep-info">
+         <h2 class="ep-name">${emp.name}</h2>
+         <p class="ep-role">${emp.role}</p>
+       </div>
+     </div>
+
+     <div class="ep-stats-row">
+       <div class="ep-stat">
+         <span class="ep-stat-num">${monthHrs}h</span>
+         <span class="ep-stat-lbl">This Month</span>
+       </div>
+       <div class="ep-stat-divider"></div>
+       <div class="ep-stat">
+         <span class="ep-stat-num">${allTimeHrs}h</span>
+         <span class="ep-stat-lbl">All Time</span>
+       </div>
+       <div class="ep-stat-divider"></div>
+       <div class="ep-stat">
+         <span class="ep-stat-num">${presentCount}</span>
+         <span class="ep-stat-lbl">Days Present</span>
+       </div>
+       <div class="ep-stat-divider"></div>
+       <div class="ep-stat">
+         <span class="ep-stat-num">${absentCount}</span>
+         <span class="ep-stat-lbl">Days Absent</span>
+       </div>
+     </div>
+
+     <div class="ep-cal-nav">
+       <button class="ep-nav-btn" id="ep-prev">&#8249;</button>
+       <span class="ep-cal-month">${MONTHS[m]} ${y}</span>
+       <button class="ep-nav-btn" id="ep-next">&#8250;</button>
+     </div>
+
+     <div class="ep-calendar">
+       <div class="ep-cal-header">
+         <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span>
+         <span>Thu</span><span>Fri</span><span>Sat</span>
+       </div>
+       <div class="ep-cal-grid" id="ep-cal-grid"></div>
+     </div>
+
+     <div class="ep-legend">
+       <span class="ep-li"><span class="ep-ld present"></span>Present (8h)</span>
+       <span class="ep-li"><span class="ep-ld absent"></span>Absent</span>
+       <span class="ep-li"><span class="ep-ld partial"></span>Partial (&lt;8h)</span>
+       <span class="ep-li"><span class="ep-ld overtime"></span>Overtime (&gt;8h)</span>
+     </div>`;
+
+  // Build calendar grid
+  const grid      = document.getElementById('ep-cal-grid');
+  const firstDow  = dow(y, m, 1); // 0=Sun
+
+  // Blank cells for offset
+  for (let i = 0; i < firstDow; i++) {
     const blank = document.createElement('div');
-    blank.className = 'cal-day empty';
+    blank.className = 'ep-day empty';
     grid.appendChild(blank);
   }
 
   // Day cells
-  for (let day = 1; day <= daysInMonth; day++) {
-    const key    = dateKey(currentYear, currentMonth, day);
-    const status = attendance[key] || null;
-    const future = isFuture(currentYear, currentMonth, day);
-    const todayF = isToday(currentYear, currentMonth, day);
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = dk(y, m, d);
+    const hrs     = getHrs(emp.id, dateStr);
+    const status  = statusOf(hrs);
+    const ds      = dayStatus(y, m, d);
 
     const cell = document.createElement('div');
-    cell.className = 'cal-day';
-    cell.textContent = day;
+    cell.className = `ep-day ep-${status}`;
+    if (ds === 'today')  cell.classList.add('ep-today');
+    if (ds === 'future') cell.classList.add('ep-future');
 
-    if (future) {
-      cell.classList.add('future');
-    } else {
-      if (todayF) cell.classList.add('today');
-      if (status) cell.classList.add(status);
-      if (selectedDate === key) cell.classList.add('selected');
+    cell.textContent = d;
 
-      cell.addEventListener('click', () => selectDay(key, day, cell));
+    // Sub-label showing hours
+    if (hrs !== null && hrs !== 8 && hrs !== 0) {
+      const sub = document.createElement('span');
+      sub.className   = 'ep-hrs-sub';
+      sub.textContent = `${hrs}h`;
+      cell.appendChild(sub);
     }
 
+    if (ds !== 'future') {
+      cell.title = hrs !== null ? `${hrs}h` : 'Not marked';
+      cell.addEventListener('click', e => openCellPopup(emp.id, d, cell, e));
+    }
     grid.appendChild(cell);
   }
 
-  updateStats();
+  // Month navigation
+  document.getElementById('ep-prev').addEventListener('click', () => {
+    S.empViewMonth--;
+    if (S.empViewMonth < 0) { S.empViewMonth = 11; S.empViewYear--; }
+    closeCellPopup();
+    renderEmployeeView();
+  });
+  document.getElementById('ep-next').addEventListener('click', () => {
+    S.empViewMonth++;
+    if (S.empViewMonth > 11) { S.empViewMonth = 0; S.empViewYear++; }
+    closeCellPopup();
+    renderEmployeeView();
+  });
 }
 
-// ── Day Selection ──────────────────────────────────────────────────────────
-function selectDay(key, day, cell) {
-  // Deselect previous
-  document.querySelectorAll('.cal-day.selected').forEach(c => c.classList.remove('selected'));
 
-  if (selectedDate === key) {
-    // Toggle off
-    selectedDate = null;
-    document.getElementById('mark-panel').style.display = 'none';
-    return;
+// ════════════════════════════════════════════════════════════
+// ADD EMPLOYEE
+// ════════════════════════════════════════════════════════════
+
+function openAddEmployeeModal() {
+  document.getElementById('new-emp-name').value = '';
+  document.getElementById('new-emp-role').value = '';
+  document.getElementById('modal-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('new-emp-name').focus(), 80);
+}
+
+function closeAddEmployeeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+
+function addEmployee() {
+  const name = document.getElementById('new-emp-name').value.trim();
+  const role = document.getElementById('new-emp-role').value.trim() || 'Worker';
+  if (!name) { toast('Please enter a name'); return; }
+  const id = 'e' + Date.now();
+  S.employees.push({ id, name, role });
+  save();
+  closeAddEmployeeModal();
+  renderMonthView();
+  toast(`${name} added`);
+}
+
+
+// ════════════════════════════════════════════════════════════
+// REMOVE EMPLOYEE  (context menu)
+// ════════════════════════════════════════════════════════════
+
+function showCtxMenu(empId, evt) {
+  evt.stopPropagation();
+  ctxEmpId = empId;
+  const menu = document.getElementById('ctx-menu');
+  menu.style.display = 'block';
+
+  let top  = evt.clientY;
+  let left = evt.clientX;
+  menu.style.top  = `${top}px`;
+  menu.style.left = `${left}px`;
+
+  requestAnimationFrame(() => {
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    if (left + mw > window.innerWidth  - 8) left = window.innerWidth  - mw - 8;
+    if (top  + mh > window.innerHeight - 8) top  = window.innerHeight - mh - 8;
+    menu.style.top  = `${top}px`;
+    menu.style.left = `${left}px`;
+  });
+}
+
+function closeCtxMenu() {
+  document.getElementById('ctx-menu').style.display = 'none';
+  ctxEmpId = null;
+}
+
+function removeEmployee(empId) {
+  const emp = S.employees.find(e => e.id === empId);
+  if (!emp) return;
+  if (!confirm(`Remove "${emp.name}" from the list? Their attendance data will also be deleted.`)) return;
+
+  S.employees = S.employees.filter(e => e.id !== empId);
+  // Remove attendance records
+  for (const key of Object.keys(S.attendance)) {
+    if (key.startsWith(`${empId}|`)) delete S.attendance[key];
   }
-
-  selectedDate = key;
-  cell.classList.add('selected');
-
-  // Show mark panel
-  const panel = document.getElementById('mark-panel');
-  const label = document.getElementById('mark-date-label');
-  label.textContent = `${day} ${MONTH_NAMES[currentMonth]} ${currentYear}`;
-  panel.style.display = 'block';
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  save();
+  closeCtxMenu();
+  renderMonthView();
+  toast(`${emp.name} removed`);
 }
 
-// ── Mark Attendance ────────────────────────────────────────────────────────
-function markAttendance(status) {
-  if (!selectedDate) return;
 
-  if (status === null) {
-    delete attendance[selectedDate];
-  } else {
-    attendance[selectedDate] = status;
-  }
+// ════════════════════════════════════════════════════════════
+// GLOBAL EVENT WIRING
+// ════════════════════════════════════════════════════════════
 
-  saveAttendance();
-  selectedDate = null;
-  document.getElementById('mark-panel').style.display = 'none';
-  renderCalendar();
+function wireEvents() {
+  // Month navigation
+  document.getElementById('mv-prev').addEventListener('click', () => changeMonthView(-1));
+  document.getElementById('mv-next').addEventListener('click', () => changeMonthView(1));
 
-  const msgs = {
-    present: 'Marked as Present',
-    absent:  'Marked as Absent',
-    half:    'Marked as Half Day',
-    null:    'Attendance cleared',
-  };
-  showToast(msgs[status] || 'Attendance cleared');
+  // Add employee
+  document.getElementById('add-emp-btn').addEventListener('click', openAddEmployeeModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeAddEmployeeModal);
+  document.getElementById('modal-add').addEventListener('click', addEmployee);
+  document.getElementById('new-emp-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('new-emp-role').focus();
+  });
+  document.getElementById('new-emp-role').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addEmployee();
+  });
+
+  // Close modal on overlay click
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-overlay')) closeAddEmployeeModal();
+  });
+
+  // Bulk mark
+  document.getElementById('bulk-present').addEventListener('click', () => markAllForDay('present'));
+  document.getElementById('bulk-absent').addEventListener('click',  () => markAllForDay('absent'));
+
+  // Cell popup actions
+  document.getElementById('cp-close').addEventListener('click', closeCellPopup);
+  document.getElementById('popup-overlay').addEventListener('click', closeCellPopup);
+
+  document.getElementById('cp-present').addEventListener('click', () => applyPopup(8));
+  document.getElementById('cp-absent').addEventListener('click',  () => applyPopup(0));
+  document.getElementById('cp-clear').addEventListener('click',   () => applyPopup(null));
+  document.getElementById('cp-set').addEventListener('click', () => {
+    const v = parseFloat(document.getElementById('cp-hours').value);
+    if (isNaN(v) || v < 0 || v > 24) { toast('Enter hours between 0 and 24'); return; }
+    applyPopup(v);
+  });
+  document.getElementById('cp-hours').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('cp-set').click();
+  });
+
+  // Context menu actions
+  document.getElementById('ctx-view').addEventListener('click', () => {
+    if (ctxEmpId) openEmployeeView(ctxEmpId);
+  });
+  document.getElementById('ctx-remove').addEventListener('click', () => {
+    if (ctxEmpId) removeEmployee(ctxEmpId);
+  });
+
+  // Close context menu on outside click
+  document.addEventListener('click', () => closeCtxMenu());
+
+  // Employee view back button
+  document.getElementById('back-btn').addEventListener('click', closeEmployeeView);
+
+  // Keyboard escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeCellPopup();
+      closeCtxMenu();
+      closeAddEmployeeModal();
+    }
+  });
 }
 
-// ── Stats ──────────────────────────────────────────────────────────────────
-function updateStats() {
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  let present = 0, absent = 0, half = 0, total = 0;
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    if (isFuture(currentYear, currentMonth, day)) continue;
-    const key = dateKey(currentYear, currentMonth, day);
-    const s   = attendance[key];
-    if (s === 'present') { present++; total++; }
-    else if (s === 'absent')  { absent++;  total++; }
-    else if (s === 'half')    { half++;    total++; }
-  }
-
-  document.getElementById('stat-present').textContent = present;
-  document.getElementById('stat-absent').textContent  = absent;
-  document.getElementById('stat-half').textContent    = half;
-  document.getElementById('stat-total').textContent   = total;
-}
-
-// ── Month Navigation ───────────────────────────────────────────────────────
-function changeMonth(dir) {
-  currentMonth += dir;
-  if (currentMonth > 11) { currentMonth = 0;  currentYear++;  }
-  if (currentMonth < 0)  { currentMonth = 11; currentYear--;  }
-  selectedDate = null;
-  document.getElementById('mark-panel').style.display = 'none';
-  renderCalendar();
-}
-
-// ── Tabs ───────────────────────────────────────────────────────────────────
-function switchTab(tabName, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById(`tab-${tabName}`).classList.add('active');
-}
-
-// ── Action Handlers ────────────────────────────────────────────────────────
-function handlePay() {
-  showToast('Pay feature coming soon!');
-}
-
-function handleCall() {
-  showToast('Calling Usha 2...');
-}
-
-function showTransactions() {
-  showToast('Transactions coming soon!');
-}
-
-// ── Toast ──────────────────────────────────────────────────────────────────
-let toastTimer = null;
-function showToast(msg) {
-  const toast = document.getElementById('toast');
-  toast.textContent = msg;
-  toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
-}
-
-// ── Seed demo data for the current month ──────────────────────────────────
-function seedDemoData() {
-  if (localStorage.getItem('attendance_seeded')) return;
-
-  const year  = today.getFullYear();
-  const month = today.getMonth();
-  const todayDate = today.getDate();
-  const statuses = ['present', 'present', 'present', 'absent', 'present', 'half', 'present'];
-
-  for (let day = 1; day < todayDate; day++) {
-    const key = dateKey(year, month, day);
-    attendance[key] = statuses[day % statuses.length];
-  }
-
-  saveAttendance();
-  localStorage.setItem('attendance_seeded', '1');
-}
-
-// ── Init ───────────────────────────────────────────────────────────────────
-seedDemoData();
-renderCalendar();
+// ─── Init ─────────────────────────────────────────────────────────────────────
+load();
+seedDemo();
+wireEvents();
+renderMonthView();

@@ -3,154 +3,128 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Attendance Tracker</title>
+  <title>Orchard Attendance</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app">
 
-    <!-- Top Nav -->
-    <header class="top-nav">
-      <button class="icon-btn back-btn" onclick="history.back()">&#8592;</button>
-      <h1 class="nav-title">Worker Details</h1>
-      <button class="icon-btn more-btn">&#8942;</button>
+  <!-- ══════════════════════════════════════════════════════════════════
+       MONTH VIEW  (default)
+  ══════════════════════════════════════════════════════════════════ -->
+  <div id="month-view" class="view">
+
+    <!-- Header -->
+    <header class="app-header">
+      <span class="app-title">Orchard Attendance</span>
+      <div class="month-nav-row">
+        <button class="nav-btn" id="mv-prev">&#8249;</button>
+        <span class="month-label" id="mv-month-label">February 2026</span>
+        <button class="nav-btn" id="mv-next">&#8250;</button>
+      </div>
+      <button class="add-emp-btn" id="add-emp-btn">+ Add Employee</button>
     </header>
 
-    <!-- Profile Card -->
-    <div class="profile-card">
-      <div class="profile-left">
-        <div class="avatar-wrap">
-          <img src="https://ui-avatars.com/api/?name=Usha+2&background=f97316&color=fff&size=72" alt="Usha 2" class="avatar" />
-          <span class="status-dot active"></span>
+    <!-- Quick Mark Panel -->
+    <div class="quick-panel" id="quick-panel">
+      <div class="quick-panel-hdr">
+        <div class="quick-date-info">
+          <span class="quick-date-label" id="quick-date-label">Select a day to mark attendance</span>
         </div>
-        <div class="profile-info">
-          <h2 class="worker-name">Usha 2</h2>
-          <p class="worker-role">Maid</p>
-          <div class="rating">
-            <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
-            <span class="rating-count">1 rating</span>
-          </div>
+        <div class="bulk-actions" id="bulk-actions" style="display:none">
+          <button class="bulk-btn bulk-present" id="bulk-present">&#10003; All Present</button>
+          <button class="bulk-btn bulk-absent"  id="bulk-absent">&#10007; All Absent</button>
         </div>
       </div>
-      <div class="status-chip active">
-        <span class="chip-dot"></span>
-        Still Inside
+      <div class="quick-emp-list" id="quick-emp-list">
+        <p class="quick-hint">&#8593; Click any day column above to mark attendance</p>
       </div>
     </div>
 
-    <!-- Status Info Bar -->
-    <div class="status-bar">
-      <div class="status-time">
-        <span class="time-label">Check In</span>
-        <span class="time-value" id="checkin-time">05:38 PM</span>
-      </div>
-      <div class="status-divider"></div>
-      <div class="status-location">
-        <span class="loc-label">&#128205; Location</span>
-        <span class="loc-value">J-J012, 5 more flats</span>
-      </div>
+    <!-- Legend -->
+    <div class="legend-bar">
+      <span class="li"><span class="ld ld-absent"></span>Absent</span>
+      <span class="li"><span class="ld ld-partial"></span>Partial (&lt;8h)</span>
+      <span class="li"><span class="ld ld-present"></span>Present (8h)</span>
+      <span class="li"><span class="ld ld-overtime"></span>Overtime (&gt;8h)</span>
+      <span class="li"><span class="ld ld-unmarked"></span>Not marked</span>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-      <button class="action-btn pay-btn" onclick="handlePay()">
-        <span class="action-icon">&#128176;</span>
-        Pay
-      </button>
-      <button class="action-btn call-btn" onclick="handleCall()">
-        <span class="action-icon">&#128222;</span>
-        Call
-      </button>
-      <button class="action-btn trans-btn" onclick="showTransactions()">
-        <span class="action-icon">&#128203;</span>
-        Transactions
-      </button>
+    <!-- Attendance Grid -->
+    <div class="grid-outer" id="grid-outer">
+      <table class="att-table">
+        <thead><tr id="grid-head-row"></tr></thead>
+        <tbody id="grid-body"></tbody>
+      </table>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab active" data-tab="attendance" onclick="switchTab('attendance', this)">Attendance</button>
-      <button class="tab" data-tab="reviews" onclick="switchTab('reviews', this)">Reviews</button>
-    </div>
+  </div><!-- /month-view -->
 
-    <!-- Attendance Panel -->
-    <div id="tab-attendance" class="tab-panel active">
 
-      <!-- Month Navigator -->
-      <div class="month-nav">
-        <button class="nav-arrow" onclick="changeMonth(-1)">&#8592;</button>
-        <span class="month-label" id="month-label">February 2026</span>
-        <button class="nav-arrow" onclick="changeMonth(1)">&#8594;</button>
-      </div>
-
-      <!-- Calendar -->
-      <div class="calendar-wrapper">
-        <div class="calendar-header">
-          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-        </div>
-        <div class="calendar-grid" id="calendar-grid"></div>
-      </div>
-
-      <!-- Stats Summary -->
-      <div class="stats-row">
-        <div class="stat-card">
-          <span class="stat-num" id="stat-present">0</span>
-          <span class="stat-label">Present</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="stat-absent">0</span>
-          <span class="stat-label">Absent</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="stat-half">0</span>
-          <span class="stat-label">Half Day</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="stat-total">0</span>
-          <span class="stat-label">Total Days</span>
-        </div>
-      </div>
-
-      <!-- Legend -->
-      <div class="legend">
-        <div class="legend-item">
-          <span class="legend-dot absent"></span>
-          <span>Full Day – Absent</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-dot present"></span>
-          <span>Full Day – Present</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-dot half"></span>
-          <span>Half Day</span>
-        </div>
-      </div>
-
-      <!-- Mark Attendance Controls (shown when a past day is selected) -->
-      <div class="mark-panel" id="mark-panel" style="display:none;">
-        <p class="mark-title">Mark attendance for <span id="mark-date-label"></span></p>
-        <div class="mark-buttons">
-          <button class="mark-btn present-btn" onclick="markAttendance('present')">Present</button>
-          <button class="mark-btn half-btn" onclick="markAttendance('half')">Half Day</button>
-          <button class="mark-btn absent-btn" onclick="markAttendance('absent')">Absent</button>
-          <button class="mark-btn clear-btn" onclick="markAttendance(null)">Clear</button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Reviews Panel -->
-    <div id="tab-reviews" class="tab-panel">
-      <div class="empty-state">
-        <span class="empty-icon">&#11088;</span>
-        <p>No reviews yet.</p>
-      </div>
-    </div>
-
+  <!-- ══════════════════════════════════════════════════════════════════
+       EMPLOYEE VIEW
+  ══════════════════════════════════════════════════════════════════ -->
+  <div id="employee-view" class="view" style="display:none">
+    <header class="emp-header">
+      <button class="back-btn" id="back-btn">&#8592; Back</button>
+      <span class="emp-header-title">Employee Details</span>
+      <span></span>
+    </header>
+    <div id="emp-view-content"></div>
   </div>
 
-  <!-- Toast Notification -->
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       CELL EDIT POPUP  (shared between both views)
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="popup-overlay" id="popup-overlay" style="display:none"></div>
+  <div class="cell-popup" id="cell-popup" style="display:none">
+    <div class="cp-header">
+      <span class="cp-title" id="cp-title"></span>
+      <button class="cp-close" id="cp-close">&times;</button>
+    </div>
+    <div class="cp-body">
+      <div class="cp-quick-row">
+        <button class="cp-btn cp-present" id="cp-present">&#10003; Present (8h)</button>
+        <button class="cp-btn cp-absent"  id="cp-absent">&#10007; Absent (0h)</button>
+      </div>
+      <div class="cp-custom-row">
+        <label class="cp-custom-label">Custom hours:</label>
+        <input class="cp-hours-input" type="number" id="cp-hours" min="0" max="24" step="0.5" value="8" />
+        <button class="cp-btn cp-set" id="cp-set">Set</button>
+      </div>
+      <button class="cp-clear-btn" id="cp-clear">Clear / Unmark</button>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       ADD EMPLOYEE MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none">
+    <div class="modal">
+      <h3 class="modal-title">Add New Employee</h3>
+      <div class="modal-field">
+        <label>Name</label>
+        <input type="text" id="new-emp-name" placeholder="e.g. Ravi Kumar" autocomplete="off" />
+      </div>
+      <div class="modal-field">
+        <label>Role</label>
+        <input type="text" id="new-emp-role" placeholder="e.g. Maid, Driver, Cook" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="modal-cancel">Cancel</button>
+        <button class="modal-add"    id="modal-add">Add Employee</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee context menu -->
+  <div class="ctx-menu" id="ctx-menu" style="display:none">
+    <button class="ctx-item" id="ctx-view">&#128100; View Details</button>
+    <button class="ctx-item ctx-danger" id="ctx-remove">&#128465; Remove Employee</button>
+  </div>
+
+  <!-- Toast -->
   <div class="toast" id="toast"></div>
 
   <script src="app.js"></script>
