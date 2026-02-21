@@ -1,3 +1,47 @@
+// ─── Firebase ────────────────────────────────────────────────────────────────
+const FB_CONFIG = {
+  apiKey:            'AIzaSyBtML1BZZ55LzSTFTZdbsdi0ROQhjaZczo',
+  authDomain:        'attendance-tracker-efbe1.firebaseapp.com',
+  projectId:         'attendance-tracker-efbe1',
+  storageBucket:     'attendance-tracker-efbe1.firebasestorage.app',
+  messagingSenderId: '160746199688',
+  appId:             '1:160746199688:web:4749e0c9dfa47e42839d3d',
+};
+
+let _db   = null;   // Firestore instance
+let _doc  = null;   // DocumentReference for orchard/main
+let _saveTimer = null;
+let _ownWrite  = false;  // flag: we just wrote, skip echo from onSnapshot
+
+function _initFirebase() {
+  try {
+    firebase.initializeApp(FB_CONFIG);
+    _db  = firebase.firestore();
+    // Enable offline persistence so the app works without internet
+    _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    _doc = _db.collection('orchard').doc('main');
+  } catch (e) {
+    console.warn('[Firebase] init failed', e);
+  }
+}
+
+// ── Sync-status indicator ─────────────────────────────────────────────────────
+function _syncStatus(state) {
+  // state: 'init' | 'syncing' | 'synced' | 'offline'
+  const el = document.getElementById('sync-dot');
+  if (!el) return;
+  const map = {
+    init:    { icon: '○', color: '#64748b', tip: 'Connecting…'              },
+    syncing: { icon: '↻', color: '#f59e0b', tip: 'Saving to cloud…'        },
+    synced:  { icon: '●', color: '#22c55e', tip: 'Synced to cloud'          },
+    offline: { icon: '!', color: '#f43f5e', tip: 'Offline – saved locally' },
+  };
+  const s = map[state] || map.init;
+  el.textContent = s.icon;
+  el.style.color = s.color;
+  el.title        = s.tip;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const TODAY       = new Date();
 const MONTHS      = ['January','February','March','April','May','June',
@@ -30,21 +74,88 @@ let popupView  = 'month';         // which view opened the popup
 let ctxEmpId   = null;
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
-function save() {
-  localStorage.setItem('orchard_v2', JSON.stringify({
-    e: S.employees,
-    a: S.attendance,
-  }));
+
+// Write to localStorage (instant cache)
+function _saveLocal() {
+  localStorage.setItem('orchard_v2', JSON.stringify({ e: S.employees, a: S.attendance }));
 }
 
-function load() {
+// Write to Firestore (debounced)
+async function _saveCloud() {
+  if (!_doc) return;
+  _syncStatus('syncing');
+  try {
+    _ownWrite = true;
+    await _doc.set({
+      employees:  S.employees,
+      attendance: S.attendance,
+      updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    _syncStatus('synced');
+  } catch (e) {
+    console.warn('[Firebase] save failed', e);
+    _syncStatus('offline');
+  } finally {
+    // Reset flag after a short delay so the echo snapshot is already gone
+    setTimeout(() => { _ownWrite = false; }, 1500);
+  }
+}
+
+// Called everywhere a change is made (replaces old save())
+function save() {
+  _saveLocal();
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_saveCloud, 600);
+}
+
+// Load data: localStorage first (instant UI), then Firestore (authoritative)
+async function load() {
+  // 1 ─ Restore from localStorage so the UI is never blank
   try {
     const raw = localStorage.getItem('orchard_v2');
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (Array.isArray(d.e) && d.e.length) S.employees  = d.e;
-    if (d.a && typeof d.a === 'object')   S.attendance = d.a;
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.e) && d.e.length) S.employees  = d.e;
+      if (d.a && typeof d.a === 'object')   S.attendance = d.a;
+    }
   } catch { /* ignore */ }
+
+  if (!_doc) return;   // Firebase unavailable – keep running on localStorage
+
+  // 2 ─ Subscribe to Firestore for authoritative data + real-time cross-device sync
+  _syncStatus('init');
+  _doc.onSnapshot(
+    { includeMetadataChanges: false },
+    snap => {
+      // Skip updates that are echoes of our own writes
+      if (_ownWrite) return;
+
+      if (!snap.exists) {
+        // First time ever – push local state to Firestore
+        _saveCloud();
+        return;
+      }
+
+      const data = snap.data();
+      let changed = false;
+      if (Array.isArray(data.employees) && data.employees.length) {
+        S.employees  = data.employees;  changed = true;
+      }
+      if (data.attendance && typeof data.attendance === 'object') {
+        S.attendance = data.attendance; changed = true;
+      }
+
+      if (changed) {
+        _saveLocal();           // keep localStorage in sync
+        renderMonthView();      // refresh grid with cloud data
+      }
+      _syncStatus('synced');
+    },
+    err => {
+      console.warn('[Firebase] snapshot error', err);
+      _syncStatus('offline');
+    }
+  );
 }
 
 // ─── Key Helpers ──────────────────────────────────────────────────────────────
@@ -867,6 +978,7 @@ function wireEvents() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-load();
+_initFirebase();  // set up Firebase before load()
+load();           // restores localStorage immediately, then subscribes to Firestore
 wireEvents();
 renderMonthView();

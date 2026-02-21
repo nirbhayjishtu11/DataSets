@@ -38,6 +38,15 @@ body {
   white-space: nowrap;
 }
 
+.sync-dot {
+  font-size: 13px;
+  line-height: 1;
+  cursor: default;
+  user-select: none;
+  transition: color 0.4s;
+  color: #64748b;
+}
+
 .month-nav-row {
   display: flex;
   align-items: center;

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Orchard Attendance</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- Firebase compat SDK (v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -16,6 +19,7 @@
     <!-- Header -->
     <header class="app-header">
       <span class="app-title">Orchard Attendance</span>
+      <span class="sync-dot" id="sync-dot" title="Connecting to cloud…">○</span>
       <div class="month-nav-row">
         <button class="nav-btn" id="mv-prev">&#8249;</button>
         <span class="month-label" id="mv-month-label">February 2026</span>
