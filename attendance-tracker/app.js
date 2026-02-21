@@ -200,8 +200,8 @@ function setHrs(empId, dateStr, hours, type) {
 function getWage(emp, type) {
   const wages = emp.wages || {};
   const key   = type || 'basic';
-  if (wages[key]) return wages[key];
-  if (key === 'basic') return emp.wage || 0;  // backward compat
+  if (wages[key] !== undefined) return wages[key];
+  if (key === 'basic') return emp.wage || 0;  // backward compat for old single-wage field
   return 0;
 }
 
@@ -434,7 +434,7 @@ function renderQuickPanel() {
         const wt = typeSel.value;
         setHrs(emp.id, dateStr, 8, wt);
         renderMonthView();
-        toast(`${emp.name}: Present (8h) – ${WORK_TYPES.find(t => t.key === wt).label}`);
+        toast(`${emp.name}: Present (8h) – ${WORK_TYPES.find(t => t.key === wt)?.label || wt}`);
       });
       card.querySelector('.qbtn-absent').addEventListener('click', () => {
         setHrs(emp.id, dateStr, 0, typeSel.value);
@@ -447,7 +447,7 @@ function renderQuickPanel() {
         if (isNaN(v) || v < 0 || v > 24) { toast('Enter hours between 0 and 24'); return; }
         setHrs(emp.id, dateStr, v, wt);
         renderMonthView();
-        toast(`${emp.name}: ${v}h – ${WORK_TYPES.find(t => t.key === wt).label}`);
+        toast(`${emp.name}: ${v}h – ${WORK_TYPES.find(t => t.key === wt)?.label || wt}`);
       });
     }
 
@@ -523,6 +523,7 @@ function openCellPopup(empId, day, cellEl, evt) {
   const hrs     = entry ? entry.hours : null;
   popupType     = entry ? entry.type  : 'basic';
   const emp     = S.employees.find(e => e.id === empId);
+  if (!emp) return;
   const dayName = DAYS_SHORT[dow(y, m, day)];
 
   document.getElementById('cp-title').textContent =
@@ -569,6 +570,7 @@ function applyPopup(hrs) {
   const m = popupView === 'month' ? S.viewMonth : S.empViewMonth;
   const dateStr = dk(y, m, popupDay);
   const emp = S.employees.find(e => e.id === popupEmpId);
+  if (!emp) { closeCellPopup(); return; }
 
   setHrs(popupEmpId, dateStr, hrs, hrs === null ? undefined : popupType);
   closeCellPopup();
