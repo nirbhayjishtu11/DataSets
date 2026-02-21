@@ -154,6 +154,12 @@ body {
 .day-nav-btn:hover:not(:disabled) { background: #3d3e6a; }
 .day-nav-btn:disabled { color: #374151; cursor: default; }
 
+.quick-date-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .quick-date-label {
   font-size: 13px;
   font-weight: 700;
