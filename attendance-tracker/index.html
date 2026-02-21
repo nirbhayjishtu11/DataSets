@@ -40,6 +40,11 @@
           <button class="day-nav-btn" id="qd-next" style="display:none">&#8250;</button>
         </div>
         <div class="bulk-actions" id="bulk-actions" style="display:none">
+          <select id="bulk-type-sel" class="qtype-sel">
+            <option value="basic">Basic</option>
+            <option value="pruning">Pruning</option>
+            <option value="netting">Netting</option>
+          </select>
           <button class="bulk-btn bulk-present" id="bulk-present">&#10003; All Present</button>
           <button class="bulk-btn bulk-absent"  id="bulk-absent">&#10007; All Absent</button>
         </div>
@@ -92,6 +97,14 @@
       <button class="cp-close" id="cp-close">&times;</button>
     </div>
     <div class="cp-body">
+      <div class="cp-type-row">
+        <span class="cp-type-label">Work type:</span>
+        <div class="cp-type-btns" id="cp-type-btns">
+          <button class="cp-type-btn active" data-type="basic">Basic</button>
+          <button class="cp-type-btn" data-type="pruning">Pruning</button>
+          <button class="cp-type-btn" data-type="netting">Netting</button>
+        </div>
+      </div>
       <div class="cp-quick-row">
         <button class="cp-btn cp-present" id="cp-present">&#10003; Present (8h)</button>
         <button class="cp-btn cp-absent"  id="cp-absent">&#10007; Absent (0h)</button>
@@ -160,8 +173,21 @@
         <input type="text" id="edit-emp-role" placeholder="e.g. Maid, Driver, Cook" autocomplete="off" />
       </div>
       <div class="modal-field">
-        <label>Daily Wage (&#8377;)</label>
-        <input type="number" id="edit-emp-wage" placeholder="e.g. 500" min="0" step="1" />
+        <label>Daily Wages (&#8377;)</label>
+        <div class="wages-grid">
+          <div class="wage-row">
+            <span class="wage-type-lbl">Basic</span>
+            <input type="number" id="edit-emp-wage-basic" placeholder="e.g. 500" min="0" step="1" />
+          </div>
+          <div class="wage-row">
+            <span class="wage-type-lbl">Pruning</span>
+            <input type="number" id="edit-emp-wage-pruning" placeholder="e.g. 700" min="0" step="1" />
+          </div>
+          <div class="wage-row">
+            <span class="wage-type-lbl">Netting</span>
+            <input type="number" id="edit-emp-wage-netting" placeholder="e.g. 600" min="0" step="1" />
+          </div>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="modal-cancel" id="edit-emp-cancel">Cancel</button>

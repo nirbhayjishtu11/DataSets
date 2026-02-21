@@ -167,8 +167,23 @@ body {
   letter-spacing: 0.3px;
 }
 
+/* Work type selector (quick panel + bulk actions) */
+.qtype-sel {
+  background: #2d2e4a;
+  border: 1px solid #3d3e6a;
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+}
+
 .bulk-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -828,6 +843,39 @@ body {
 }
 .cp-close:hover { color: #e2e8f0; }
 
+/* Cell popup work type row */
+.cp-type-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-type-label {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.cp-type-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cp-type-btn {
+  padding: 4px 10px;
+  border: 1px solid #3d3e6a;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cp-type-btn:hover { background: #2d2e4a; color: #e2e8f0; }
+.cp-type-btn.active { background: #4338ca; border-color: #6366f1; color: #c7d2fe; }
+
 .cp-body {
   padding: 12px 14px 14px;
   display: flex;
@@ -941,6 +989,68 @@ body {
   color: #64748b;
   margin-bottom: 16px;
   line-height: 1.5;
+}
+
+/* Wages grid in edit modal */
+.wages-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wage-type-lbl {
+  font-size: 12px;
+  color: #94a3b8;
+  min-width: 58px;
+  font-weight: 500;
+}
+
+.wage-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3d3e6a;
+  background: #12131f;
+  color: #e2e8f0;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.wage-row input:focus { border-color: #6366f1; }
+
+/* Employee view wages display */
+.ep-wages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.ep-wage-item {
+  font-size: 11px;
+  color: #16a34a;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ep-wage-type {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ep-wages-unset {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
 }
 
 .modal-field input {

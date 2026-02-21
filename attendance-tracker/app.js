@@ -47,6 +47,11 @@ const TODAY       = new Date();
 const MONTHS      = ['January','February','March','April','May','June',
                      'July','August','September','October','November','December'];
 const DAYS_SHORT  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const WORK_TYPES  = [
+  { key: 'basic',   label: 'Basic'   },
+  { key: 'pruning', label: 'Pruning' },
+  { key: 'netting', label: 'Netting' },
+];
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let S = {
@@ -71,6 +76,7 @@ let S = {
 let popupEmpId = null;
 let popupDay   = null;
 let popupView  = 'month';         // which view opened the popup
+let popupType  = 'basic';         // selected work type in cell popup
 let ctxEmpId   = null;
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
@@ -164,15 +170,39 @@ function dk(y, m, d) {
 }
 function ak(empId, dateStr) { return `${empId}|${dateStr}`; }
 
-function getHrs(empId, dateStr) {
+// Returns { hours, type } or null. Migrates legacy number values on read.
+function getEntry(empId, dateStr) {
   const v = S.attendance[ak(empId, dateStr)];
-  return v === undefined ? null : v;
+  if (v === undefined) return null;
+  if (typeof v === 'number') return { hours: v, type: 'basic' };
+  return v;
 }
 
-function setHrs(empId, dateStr, hours) {
-  if (hours === null) delete S.attendance[ak(empId, dateStr)];
-  else S.attendance[ak(empId, dateStr)] = Number(hours);
+function getHrs(empId, dateStr) {
+  const e = getEntry(empId, dateStr);
+  return e === null ? null : e.hours;
+}
+
+function setHrs(empId, dateStr, hours, type) {
+  if (hours === null) {
+    delete S.attendance[ak(empId, dateStr)];
+  } else {
+    const existing = getEntry(empId, dateStr);
+    S.attendance[ak(empId, dateStr)] = {
+      hours: Number(hours),
+      type: type || (existing ? existing.type : 'basic'),
+    };
+  }
   save();
+}
+
+// Returns the configured daily wage for a given work type (with legacy fallback).
+function getWage(emp, type) {
+  const wages = emp.wages || {};
+  const key   = type || 'basic';
+  if (wages[key]) return wages[key];
+  if (key === 'basic') return emp.wage || 0;  // backward compat
+  return 0;
 }
 
 // ─── Date Helpers ─────────────────────────────────────────────────────────────
@@ -370,7 +400,8 @@ function renderQuickPanel() {
   listEl.innerHTML = '';
 
   S.employees.forEach(emp => {
-    const hrs    = getHrs(emp.id, dateStr);
+    const entry  = getEntry(emp.id, dateStr);
+    const hrs    = entry ? entry.hours : null;
     const status = statusOf(hrs);
 
     const card = document.createElement('div');
@@ -381,32 +412,42 @@ function renderQuickPanel() {
         `<span class="qcard-name">${emp.name}</span>` +
         `<span class="qcard-future">Future date – cannot mark</span>`;
     } else {
-      const defHrs = (hrs !== null && hrs !== 0 && hrs !== 8) ? hrs : 8;
+      const defHrs  = (hrs !== null && hrs !== 0 && hrs !== 8) ? hrs : 8;
+      const defType = entry ? entry.type : 'basic';
+      const typeOpts = WORK_TYPES.map(t =>
+        `<option value="${t.key}"${t.key === defType ? ' selected' : ''}>${t.label}</option>`
+      ).join('');
+
       card.innerHTML =
         `<span class="qcard-name">${emp.name}</span>` +
         `<span class="qcard-badge badge-${status}">${hrsLabel(hrs)}</span>` +
+        `<select class="qtype-sel">${typeOpts}</select>` +
         `<button class="qbtn qbtn-present" data-emp="${emp.id}">Present</button>` +
         `<button class="qbtn qbtn-absent"  data-emp="${emp.id}">Absent</button>` +
         `<input  class="qhrs-input" type="number" min="0" max="24" step="0.5" value="${defHrs}" />` +
         `<button class="qbtn qbtn-set"     data-emp="${emp.id}">Set</button>`;
 
-      const inp = card.querySelector('.qhrs-input');
+      const inp     = card.querySelector('.qhrs-input');
+      const typeSel = card.querySelector('.qtype-sel');
+
       card.querySelector('.qbtn-present').addEventListener('click', () => {
-        setHrs(emp.id, dateStr, 8);
+        const wt = typeSel.value;
+        setHrs(emp.id, dateStr, 8, wt);
         renderMonthView();
-        toast(`${emp.name}: Present (8h)`);
+        toast(`${emp.name}: Present (8h) – ${WORK_TYPES.find(t => t.key === wt).label}`);
       });
       card.querySelector('.qbtn-absent').addEventListener('click', () => {
-        setHrs(emp.id, dateStr, 0);
+        setHrs(emp.id, dateStr, 0, typeSel.value);
         renderMonthView();
         toast(`${emp.name}: Absent`);
       });
       card.querySelector('.qbtn-set').addEventListener('click', () => {
-        const v = parseFloat(inp.value);
+        const v  = parseFloat(inp.value);
+        const wt = typeSel.value;
         if (isNaN(v) || v < 0 || v > 24) { toast('Enter hours between 0 and 24'); return; }
-        setHrs(emp.id, dateStr, v);
+        setHrs(emp.id, dateStr, v, wt);
         renderMonthView();
-        toast(`${emp.name}: ${v}h`);
+        toast(`${emp.name}: ${v}h – ${WORK_TYPES.find(t => t.key === wt).label}`);
       });
     }
 
@@ -442,13 +483,15 @@ function changeSelDay(dir) {
 }
 
 // ─── Mark All for selected day ────────────────────────────────────────────────
-function markAllForDay(type) {
+function markAllForDay(type, workType) {
   if (!S.selDay) return;
   const dateStr = dk(S.viewYear, S.viewMonth, S.selDay);
   const hrs     = type === 'present' ? 8 : 0;
-  S.employees.forEach(emp => setHrs(emp.id, dateStr, hrs));
+  const wt      = workType || 'basic';
+  S.employees.forEach(emp => setHrs(emp.id, dateStr, hrs, wt));
   renderMonthView();
-  toast(type === 'present' ? 'All marked Present (8h)' : 'All marked Absent');
+  const wtLabel = WORK_TYPES.find(t => t.key === wt)?.label || 'Basic';
+  toast(type === 'present' ? `All Present (8h) – ${wtLabel}` : 'All marked Absent');
 }
 
 // ─── Month navigation (month view) ───────────────────────────────────────────
@@ -476,13 +519,20 @@ function openCellPopup(empId, day, cellEl, evt) {
   const y  = S.curView === 'month' ? S.viewYear  : S.empViewYear;
   const m  = S.curView === 'month' ? S.viewMonth : S.empViewMonth;
   const dateStr = dk(y, m, day);
-  const hrs     = getHrs(empId, dateStr);
+  const entry   = getEntry(empId, dateStr);
+  const hrs     = entry ? entry.hours : null;
+  popupType     = entry ? entry.type  : 'basic';
   const emp     = S.employees.find(e => e.id === empId);
   const dayName = DAYS_SHORT[dow(y, m, day)];
 
   document.getElementById('cp-title').textContent =
     `${emp.name} – ${dayName} ${day} ${MONTHS[m].slice(0,3)} ${y}`;
   document.getElementById('cp-hours').value = hrs !== null ? hrs : 8;
+
+  // Highlight the correct type button
+  document.querySelectorAll('.cp-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === popupType);
+  });
 
   const popup   = document.getElementById('cell-popup');
   const overlay = document.getElementById('popup-overlay');
@@ -520,7 +570,7 @@ function applyPopup(hrs) {
   const dateStr = dk(y, m, popupDay);
   const emp = S.employees.find(e => e.id === popupEmpId);
 
-  setHrs(popupEmpId, dateStr, hrs);
+  setHrs(popupEmpId, dateStr, hrs, hrs === null ? undefined : popupType);
   closeCellPopup();
 
   const label = hrs === null ? 'Cleared' : hrs === 0 ? 'Absent' : `${hrs}h`;
@@ -563,30 +613,43 @@ function renderEmployeeView() {
   const totalDays = dim(y, m);
 
   // ── Calculate stats ───────────────────────────────────────
-  const wage = emp.wage || 0;
+  const wages = emp.wages || (emp.wage ? { basic: emp.wage } : {});
+  const hasWages = Object.values(wages).some(v => v > 0);
   let monthHrs = 0, allTimeHrs = 0;
   let presentCount = 0, absentCount = 0;
   let monthEarnings = 0, allTimeEarnings = 0;
 
   for (let d = 1; d <= totalDays; d++) {
-    const h = getHrs(emp.id, dk(y, m, d));
-    if (h !== null) {
-      monthHrs += h;
-      if (wage && h > 0) monthEarnings += (h / 8) * wage;
+    const entry = getEntry(emp.id, dk(y, m, d));
+    if (entry !== null) {
+      monthHrs += entry.hours;
+      const w = getWage(emp, entry.type);
+      if (w && entry.hours > 0) monthEarnings += (entry.hours / 8) * w;
     }
   }
 
   for (const [key, val] of Object.entries(S.attendance)) {
     if (key.startsWith(`${emp.id}|`)) {
-      allTimeHrs += val;
-      if (val > 0) { presentCount++; if (wage) allTimeEarnings += (val / 8) * wage; }
-      if (val === 0) absentCount++;
+      const entry = typeof val === 'number' ? { hours: val, type: 'basic' } : val;
+      allTimeHrs += entry.hours;
+      if (entry.hours > 0) {
+        presentCount++;
+        const w = getWage(emp, entry.type);
+        if (w) allTimeEarnings += (entry.hours / 8) * w;
+      }
+      if (entry.hours === 0) absentCount++;
     }
   }
 
-  const wageLabel      = wage ? `${fmtMoney(wage)}/day` : 'Tap Edit to set wage';
-  const monthEarnStr   = wage ? fmtMoney(monthEarnings)   : '—';
-  const totalEarnStr   = wage ? fmtMoney(allTimeEarnings)  : '—';
+  // Build wages display HTML
+  const wagesDisplayHtml = hasWages
+    ? WORK_TYPES.filter(t => wages[t.key] > 0)
+        .map(t => `<span class="ep-wage-item"><span class="ep-wage-type">${t.label}:</span> ${fmtMoney(wages[t.key])}/day</span>`)
+        .join('')
+    : '<span class="ep-wages-unset">Tap Edit to set wages</span>';
+
+  const monthEarnStr  = hasWages ? fmtMoney(monthEarnings)  : '—';
+  const totalEarnStr  = hasWages ? fmtMoney(allTimeEarnings) : '—';
 
   // ── Render ────────────────────────────────────────────────
   const content = document.getElementById('emp-view-content');
@@ -596,7 +659,7 @@ function renderEmployeeView() {
        <div class="ep-info">
          <h2 class="ep-name">${emp.name}</h2>
          <p class="ep-role">${emp.role}</p>
-         <p class="ep-wage-badge ${wage ? '' : 'ep-wage-unset'}">${wageLabel}</p>
+         <div class="ep-wages">${wagesDisplayHtml}</div>
        </div>
        <button class="ep-edit-btn" id="ep-edit-btn">&#9998; Edit</button>
      </div>
@@ -608,12 +671,12 @@ function renderEmployeeView() {
        </div>
        <div class="ep-stat-divider"></div>
        <div class="ep-stat">
-         <span class="ep-stat-num ${!wage ? 'ep-stat-muted' : 'ep-stat-money'}">${monthEarnStr}</span>
+         <span class="ep-stat-num ${!hasWages ? 'ep-stat-muted' : 'ep-stat-money'}">${monthEarnStr}</span>
          <span class="ep-stat-lbl">Month Earned</span>
        </div>
        <div class="ep-stat-divider"></div>
        <div class="ep-stat">
-         <span class="ep-stat-num ${!wage ? 'ep-stat-muted' : 'ep-stat-money'}">${totalEarnStr}</span>
+         <span class="ep-stat-num ${!hasWages ? 'ep-stat-muted' : 'ep-stat-money'}">${totalEarnStr}</span>
          <span class="ep-stat-lbl">Total Earned</span>
        </div>
        <div class="ep-stat-divider"></div>
@@ -797,7 +860,11 @@ function openEditEmpModal(empId) {
   editEmpId = empId;
   document.getElementById('edit-emp-name').value = emp.name;
   document.getElementById('edit-emp-role').value = emp.role;
-  document.getElementById('edit-emp-wage').value = emp.wage || '';
+  // Support legacy single wage migrating to wages object
+  const wages = emp.wages || (emp.wage ? { basic: emp.wage } : {});
+  document.getElementById('edit-emp-wage-basic').value   = wages.basic   || '';
+  document.getElementById('edit-emp-wage-pruning').value = wages.pruning || '';
+  document.getElementById('edit-emp-wage-netting').value = wages.netting || '';
   document.getElementById('edit-emp-overlay').style.display = 'flex';
   setTimeout(() => document.getElementById('edit-emp-name').focus(), 80);
 }
@@ -808,16 +875,26 @@ function closeEditEmpModal() {
 }
 
 function saveEditEmp() {
-  const name    = document.getElementById('edit-emp-name').value.trim();
-  const role    = document.getElementById('edit-emp-role').value.trim() || 'Worker';
-  const wageRaw = document.getElementById('edit-emp-wage').value;
-  const wage    = wageRaw !== '' ? Math.max(0, Math.round(Number(wageRaw))) : 0;
+  const name = document.getElementById('edit-emp-name').value.trim();
+  const role = document.getElementById('edit-emp-role').value.trim() || 'Worker';
   if (!name) { toast('Please enter a name'); return; }
+
+  const parseW = id => {
+    const raw = document.getElementById(id).value;
+    return raw !== '' ? Math.max(0, Math.round(Number(raw))) : 0;
+  };
+  const wages = {
+    basic:   parseW('edit-emp-wage-basic'),
+    pruning: parseW('edit-emp-wage-pruning'),
+    netting: parseW('edit-emp-wage-netting'),
+  };
+
   const emp = S.employees.find(e => e.id === editEmpId);
   if (!emp) return;
-  emp.name = name;
-  emp.role = role;
-  emp.wage = wage;
+  emp.name  = name;
+  emp.role  = role;
+  emp.wages = wages;
+  delete emp.wage;  // remove legacy field
   save();
   closeEditEmpModal();
   if (S.curView === 'employee' && S.selEmpId === editEmpId) renderEmployeeView();
@@ -913,8 +990,24 @@ function wireEvents() {
   });
 
   // Bulk mark
-  document.getElementById('bulk-present').addEventListener('click', () => markAllForDay('present'));
-  document.getElementById('bulk-absent').addEventListener('click',  () => markAllForDay('absent'));
+  document.getElementById('bulk-present').addEventListener('click', () => {
+    const wt = document.getElementById('bulk-type-sel').value;
+    markAllForDay('present', wt);
+  });
+  document.getElementById('bulk-absent').addEventListener('click', () => {
+    const wt = document.getElementById('bulk-type-sel').value;
+    markAllForDay('absent', wt);
+  });
+
+  // Work type buttons in cell popup
+  document.querySelectorAll('.cp-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      popupType = btn.dataset.type;
+      document.querySelectorAll('.cp-type-btn').forEach(b =>
+        b.classList.toggle('active', b === btn)
+      );
+    });
+  });
 
   // Cell popup actions
   document.getElementById('cp-close').addEventListener('click', closeCellPopup);
@@ -953,9 +1046,15 @@ function wireEvents() {
     if (e.key === 'Enter') document.getElementById('edit-emp-role').focus();
   });
   document.getElementById('edit-emp-role').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('edit-emp-wage').focus();
+    if (e.key === 'Enter') document.getElementById('edit-emp-wage-basic').focus();
   });
-  document.getElementById('edit-emp-wage').addEventListener('keydown', e => {
+  document.getElementById('edit-emp-wage-basic').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('edit-emp-wage-pruning').focus();
+  });
+  document.getElementById('edit-emp-wage-pruning').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('edit-emp-wage-netting').focus();
+  });
+  document.getElementById('edit-emp-wage-netting').addEventListener('keydown', e => {
     if (e.key === 'Enter') saveEditEmp();
   });
 
