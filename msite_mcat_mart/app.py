@@ -6,7 +6,11 @@ import streamlit as st
 
 DATA_PATH = "data/msite_mcat_mart.csv"
 
-DIMENSIONS = ["datatype", "page_type", "usermode", "source"]
+GRAIN_LABELS = {"d": "Daily", "w": "Weekly", "m": "Monthly"}
+
+PAGE_TYPE_LABELS = {1: "Overall", 2: "All India", 3: "City", 4: "Pmcat", 5: "Impact", 6: "Spec"}
+USERMODE_LABELS = {1: "Overall", 2: "Unidentified", 3: "Identified", 4: "Full Login"}
+SOURCE_LABELS = {1: "Overall", 2: "Organic", 3: "PRD Ads", 4: "Affiliate", 5: "Internal", 6: "Others"}
 
 FUNNEL_GROUPS = {
     "Enquiry": ["enq_generated", "enq_gen_sender", "enq_approved", "enq_app_sender"],
@@ -16,13 +20,13 @@ FUNNEL_GROUPS = {
         "bl_gen_with_wa", "bl_wa_gen_sender", "bl_wa_approved", "bl_wa_app_sender",
     ],
     "Intent BL": ["intent_bl_generated", "intent_user_approved"],
-    "Calls": ["c2c_calls", "c2c_u_calls", "c2c_callers", "pns_calls", "normal_calls"],
+    "Calls": ["c2c_calls", "c2c_callers", "pns_calls"],
     "Unique Senders": ["unq_sender", "unq_sender_no_call"],
 }
 
 GA_EVENT_COLS = [
     "product_listing_click", "inline_bl_cta_clicks", "getquote_onpage_cta_click",
-    "miniBL_cta_click", "featcat_bl_click", "3rdpv_cta_click", "6thpv_cta_click",
+    "minibl_cta_click", "featcat_bl_click", "thirdpv_cta_click", "sixthpv_cta_click",
     "get_best_price_click", "price_on_request_click", "ask_for_clicks",
     "recom_enquiry_click", "listing_wa_cta_clicks", "recom_wa_click",
     "inline_call_cta_clicks", "recom_call_click", "recom_category_click",
@@ -33,30 +37,39 @@ KPI_CARD_METRICS = [
     "enq_generated", "wa_generated", "bl_generated", "c2c_calls", "unq_sender",
 ]
 
-DATATYPE_LABELS = {1: "Daily", 2: "Weekly", 3: "Monthly"}
+CODE_DIMENSIONS = [
+    ("page_type", "Page Type", PAGE_TYPE_LABELS),
+    ("usermode", "User Mode", USERMODE_LABELS),
+    ("source", "Source", SOURCE_LABELS),
+]
+
+
+def prepare(df):
+    for col in ("start_date", "end_date"):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    if "week_mon_day" in df.columns:
+        df["grain"] = df["week_mon_day"].map(GRAIN_LABELS).fillna(df["week_mon_day"].astype(str))
+    for col, _, labels in CODE_DIMENSIONS:
+        if col in df.columns:
+            df[col] = df[col].map(labels).fillna(df[col].astype(str))
+    return df
 
 
 @st.cache_data
 def load_data(path):
-    df = pd.read_csv(path)
-    for col in ("start_date", "end_date"):
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-    if "datatype" in df.columns:
-        df["grain"] = df["datatype"].map(DATATYPE_LABELS).fillna(df["datatype"].astype(str))
-    return df
+    return prepare(pd.read_csv(path))
 
 
 def sidebar_filters(df):
     st.sidebar.header("Filters")
 
-    grain_col = "grain" if "grain" in df.columns else None
-    if grain_col:
-        grains = sorted(df[grain_col].dropna().unique())
+    if "grain" in df.columns:
+        grains = sorted(df["grain"].dropna().unique())
         selected_grain = st.sidebar.radio("Grain", grains, index=0)
-        df = df[df[grain_col] == selected_grain]
+        df = df[df["grain"] == selected_grain]
 
-    for dim, label in [("page_type", "Page Type"), ("usermode", "User Mode"), ("source", "Source")]:
+    for dim, label, _ in CODE_DIMENSIONS:
         if dim in df.columns:
             options = sorted(df[dim].dropna().unique())
             selected = st.sidebar.multiselect(label, options, default=options)
@@ -168,12 +181,7 @@ def main():
 
     uploaded = st.sidebar.file_uploader("Upload mart export (CSV)", type="csv")
     if uploaded is not None:
-        df = pd.read_csv(uploaded)
-        for col in ("start_date", "end_date"):
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors="coerce")
-        if "datatype" in df.columns:
-            df["grain"] = df["datatype"].map(DATATYPE_LABELS).fillna(df["datatype"].astype(str))
+        df = prepare(pd.read_csv(uploaded))
     else:
         try:
             df = load_data(DATA_PATH)
